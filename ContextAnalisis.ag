@@ -1,0 +1,690 @@
+module {ContextAnalisis} {} 
+{
+import Data.List (elemIndex,(\\)) 
+import Data.Maybe (isJust,fromJust)
+}
+
+data Program
+  | Class name:: String   membersList:: MembersList
+
+type MembersList = [ Member ]
+
+data Member
+  | Atribute type1:: Type   ident:: String
+  | Method type1:: Type ident:: String
+                       parametersList:: ParametersList
+                       instrs:: InstructionsList
+
+data Type
+  | IntegerType
+  | BooleanType
+  | VoidType
+
+type ParametersList = [ Parameter ]
+
+data Parameter
+  | Parameter type1:: Type   ident:: String
+
+type InstructionsList = [ Instruction ]
+
+data Instruction
+  | Asignement  ident:: String   expr:: Expression
+  | Conditional cond:: Expression ifInstrs:: InstructionsList elseInstrs:: InstructionsList
+  | ConditionalCycle cond:: Expression instrs:: InstructionsList
+  | Declaration type1::Type ident:: String
+  | MethodCall method::String parameters::LocalParams
+  | Return expr::Expression
+
+type LocalParams = [ Expression ]
+
+data Expression
+  | LInteger  value:: String
+  | LBoolean value:: String
+  | Variable ident:: String
+  | Operation op:: Op exprI:: Expression exprD:: Expression 
+  | ResultCall method::String parameters::LocalParams
+
+data Op
+  | Or
+  | And
+  | Equal
+  | NotEqual
+  | Less
+  | Greater
+  | LessEqual
+  | GreaterEqual
+  | Add
+  | Sub
+  | Product
+  | Division
+  | Module
+ 
+deriving Program Member Type Parameter Instruction Expression Op: Show
+deriving Type: Eq
+
+
+
+attr Program
+  syn ast:: {Program}
+  syn messages::{[String]}
+  syn errorProgram :: {String}
+  syn output :: {String}
+
+sem Program
+  | Class lhs.ast = Class @name @membersList.ast
+          lhs.messages = @membersList.messages
+          lhs.errorProgram = "class "++ @name ++"{\n"++(tab @membersList.errorProgram)++"}"
+          membersList.tIdDefs = @membersList.idDefs
+          membersList.typesDefs = @membersList.types
+          membersList.aIdDefs = []
+          lhs.output = "link " ++(show @numAtrib)++"\n"++"ldrr R4 MP\n"
+                        ++(if "main" `elem` @membersList.methods then call "main" else "")
+                        ++"bra END\n"++ @membersList.output++"END: halt\n"  
+          membersList.labels = []
+          loc.numAtrib = length @membersList.idDefs
+          membersList.tMethods = @membersList.methods
+          membersList.tTypesParam = @membersList.typesParam
+          membersList.tTypesRet = @membersList.typesRet
+attr MembersList
+  syn ast:: {MembersList}
+  inh tIdDefs::{[String]} 
+  inh typesDefs::{[Type]}
+  inh aIdDefs::{[String]}
+  syn idDefs::{[String]}
+  syn types::{[Type]}
+  syn messages::{[String]}
+  syn errorProgram:: {String}
+  syn output :: {String}
+  chn labels :: {[String]}
+  syn methods :: {[String]}
+  syn typesParam :: {[[Type]]}
+  syn typesRet :: {[Type]}
+  inh tMethods:: {[String]}
+  inh tTypesParam :: {[[Type]]}
+  inh tTypesRet :: {[Type]}
+  
+sem MembersList
+  | Cons lhs.ast = @hd.ast : @tl.ast
+         lhs.idDefs = @hd.idDefs ++ @tl.idDefs
+         lhs.types = @hd.types ++ @tl.types
+         lhs.messages = @hd.messages ++ @tl.messages
+         lhs.errorProgram = " \n"++ @hd.errorProgram ++"\n"++ @tl.errorProgram
+         tl.aIdDefs = @lhs.aIdDefs ++ @hd.idDefs 
+         lhs.output = @hd.output ++ @tl.output
+         lhs.methods = @hd.method ++ @tl.methods
+         lhs.typesParam = @hd.typesParam ++ @tl.typesParam
+         lhs.typesRet = @hd.typeRet ++ @tl.typesRet
+  | Nil  lhs.ast = []
+         lhs.idDefs = []
+         lhs.types = []
+         lhs.messages = []
+         lhs.errorProgram =""
+         lhs.output = ""
+         lhs.methods = []
+         lhs.typesParam = []   
+         lhs.typesRet = []      
+
+attr Member
+  syn ast:: {Member}
+  inh tIdDefs::{[String]}
+  inh typesDefs::{[Type]}
+  inh aIdDefs::{[String]}
+  syn idDefs::{[String]}
+  syn types::{[Type]}
+  syn messages::{[String]}
+  syn errorProgram :: {String}
+  syn output :: {String}
+  chn labels :: {[String]}
+  syn method :: {[String]}
+  syn typesParam :: {[[Type]]}
+  syn typeRet :: {[Type]}
+  inh tMethods:: {[String]}
+  inh tTypesParam :: {[[Type]]}
+  inh tTypesRet :: {[Type]}
+  
+sem Member
+  | Atribute lhs.ast = Atribute @type1.ast @ident
+             lhs.idDefs = [@ident]
+             lhs.types  = [@type1.ast]
+             loc.error = messageDecl @ident [@lhs.aIdDefs] ++ variableVoid @ident @type1.ast
+             lhs.messages = @error
+             lhs.errorProgram = @type1.errorProgram ++" "++ @ident++";"  
+                                 ++ mark @error
+             lhs.output = ""
+             lhs.method = []
+             lhs.typesParam = []
+             lhs.typeRet = []
+  | Method   lhs.ast = Method @type1.ast  @ident  @parametersList.ast @instrs.ast
+             loc.error =  errorReturn @ident @type1.ast (@instrs.algunReturn)
+                          ++ @parametersList.messages 
+             lhs.messages = @error ++ @instrs.messages
+             lhs.idDefs = []
+             lhs.types = []
+             lhs.errorProgram = @type1.errorProgram ++" "++ @ident++"("
+                                 ++ @parametersList.errorProgram++"){"
+                                 ++ mark @error ++"\n"
+                                 ++ (tab @instrs.errorProgram)++"}"
+             loc.methodLabel = "ET"++ @ident ++ "0000"
+             lhs.output = @methodLabel ++": link "++(show @numLoc)++"\n" 
+                           ++ loadParams @parametersList.numParam
+                           ++ @instrs.output ++(if @instrs.faltaReturn 
+                                                 then "unlink\n" ++"ret\n"
+                                                 else "")
+             instrs.idsLocal = [@parametersList.ids]
+             instrs.typesLocal = [@parametersList.type1]
+             loc.numLoc = length (head @instrs.idsLocal)
+             lhs.method = [@ident]
+             lhs.typesParam = [@parametersList.type1]
+             lhs.typeRet = [@type1.ast]
+             instrs.method = @ident
+             instrs.labels = [@methodLabel]
+             instrs.algunReturn = False
+             instrs.faltaReturn = True
+             
+
+attr Type
+  syn ast :: {Type}
+  syn errorProgram ::{String}
+
+sem Type
+  | IntegerType   lhs.ast = IntegerType
+                 lhs.errorProgram = "int"
+  | BooleanType lhs.ast = BooleanType
+                 lhs.errorProgram = "boolean"
+  | VoidType    lhs.ast = VoidType 
+                 lhs.errorProgram = "void"
+
+attr ParametersList
+  syn  ast:: {ParametersList}
+  syn errorProgram:: {String}
+  syn numParam::{Int}
+  syn type1 :: {[Type]}
+  syn ids :: {[String]}
+  syn messages :: {[String]}
+
+sem ParametersList
+  | Cons lhs.ast = @hd.ast : @tl.ast
+         lhs.errorProgram = @hd.errorProgram ++ commaSeparated @tl.errorProgram
+         lhs.numParam = 1 + @tl.numParam
+         lhs.type1 = @hd.type1 : @tl.type1
+         lhs.ids = @hd.id : @tl.ids
+         lhs.messages = @hd.messages ++ @tl.messages
+  | Nil  lhs.ast = []
+         lhs.errorProgram=""
+         lhs.numParam = 0
+         lhs.type1 = []
+         lhs.ids = []
+         lhs.messages = []
+
+attr Parameter
+  syn  ast :: {Parameter}
+  syn errorProgram:: {String}
+  syn type1 :: {Type}
+  syn id :: {String}
+  syn messages :: {[String]}
+
+sem Parameter
+  | Parameter lhs.ast = Parameter @type1.ast @ident
+              lhs.errorProgram = @type1.errorProgram++" "++ @ident
+              lhs.type1 = @type1.ast
+              lhs.id = @ident
+              lhs.messages = variableVoid @ident @type1.ast
+
+attr InstructionsList
+  syn  ast:: {InstructionsList}
+  inh  tIdDefs :: {[String]}
+  inh  typesDefs::{[Type]}
+  inh  aIdDefs :: {[String]}
+  syn messages :: {[String]}
+  syn errorProgram :: {String}
+  syn output :: {String}
+  chn labels :: {[String]}
+  chn idsLocal :: {[[String]]}
+  chn typesLocal :: {[[Type]]}
+  inh tMethods:: {[String]}
+  inh tTypesParam :: {[[Type]]}
+  inh tTypesRet :: {[Type]}
+  inh method :: {String}
+  chn algunReturn :: {Bool}
+  chn faltaReturn :: {Bool}
+  syn numVar::{Int}
+  
+sem InstructionsList
+  | Cons lhs.ast = @hd.ast : @tl.ast
+         lhs.messages = @hd.messages ++ @tl.messages
+         lhs.errorProgram = @hd.errorProgram ++"\n"++ @tl.errorProgram
+         lhs.output = @hd.output ++ @tl.output
+         lhs.numVar = @hd.numVar + @tl.numVar
+  | Nil  lhs.ast =  []
+         lhs.messages = []
+         lhs.errorProgram =""
+         lhs.output = ""
+         lhs.numVar = 0        
+
+attr Instruction
+  syn ast:: {Instruction}
+  inh tIdDefs::{[String]}
+  inh typesDefs::{[Type]}
+  inh aIdDefs::{[String]}
+  syn messages::{[String]}
+  syn errorProgram:: {String}
+  syn output :: {String}
+  chn labels ::{[String]}
+  chn idsLocal :: {[[String]]}
+  chn typesLocal :: {[[Type]]}
+  inh tMethods::{[String]}
+  inh tTypesParam :: {[[Type]]}
+  inh tTypesRet :: {[Type]}
+  inh method :: {String}
+  chn algunReturn :: {Bool}
+  chn faltaReturn :: {Bool}
+  syn numVar::{Int}
+sem Instruction
+  | Asignement lhs.ast = Asignement @ident @expr.ast
+               loc.error = @errorRet ++ (messageUse @ident @lhs.tIdDefs @lhs.idsLocal) 
+                           ++ (compTypes ("the variable '"++ @ident++"'") 
+                                         (findType @ident @lhs.tIdDefs @lhs.typesDefs 
+                                                     @lhs.idsLocal @lhs.typesLocal) 
+                                         @expr.type1
+                              ) ++ @expr.messagesType ++ @expr.messages
+               lhs.messages = @error
+               lhs.errorProgram = @ident++" = "++ @expr.errorProgram++";" ++ mark @error
+               lhs.output = @expr.output ++ useSpaceVar "st" @ident @lhs.tIdDefs @lhs.idsLocal
+
+  | Conditional lhs.ast = Conditional @cond.ast @ifInstrs.ast @elseInstrs.ast
+                lhs.messages = @error ++ @ifInstrs.messages ++ @elseInstrs.messages
+                lhs.errorProgram = "if("++ @cond.errorProgram++"){"
+                                    ++ mark @error ++"\n"++(tab @ifInstrs.errorProgram)++"}"
+                                    ++(if null @elseInstrs.errorProgram then "" 
+                                        else "else{\n"++(tab @elseInstrs.errorProgram)++"}")
+                lhs.output = linkLocal @numVar (@cond.output ++"brf "
+                                               ++(@nLabels!!1)++"\n"
+                                               ++ @ifInstrs.output++"bra " ++(@nLabels!!0)++"\n" ++(@nLabels!!1)++": "
+                                               ++ @elseInstrs.output++"nop\n" 
+                                               ++ (@nLabels!!0)++":")
+                ifInstrs.labels = @nLabels
+                loc.idsLocal =  localScope @numVar @lhs.idsLocal
+                loc.typesLocal = localScope @numVar @lhs.typesLocal
+                cond.idsLocal = @idsLocal
+                cond.typesLocal = @typesLocal
+                ifInstrs.idsLocal = @idsLocal
+                ifInstrs.typesLocal = @typesLocal
+                elseInstrs.idsLocal =  @idsLocal
+                elseInstrs.typesLocal =  @typesLocal
+                lhs.idsLocal = @lhs.idsLocal
+                lhs.typesLocal = @lhs.typesLocal
+                loc.numVar = max @ifInstrs.numVar @elseInstrs.numVar
+                elseInstrs.algunReturn = @lhs.algunReturn
+                elseInstrs.faltaReturn = @lhs.faltaReturn 
+                lhs.algunReturn = @ifInstrs.algunReturn || @elseInstrs.algunReturn
+                lhs.faltaReturn = @lhs.faltaReturn 
+                                  && (@ifInstrs.faltaReturn || @elseInstrs.faltaReturn)       
+  | ConditionalCycle lhs.ast = ConditionalCycle @cond.ast @instrs.ast
+                     lhs.messages = @error ++ @instrs.messages
+                     lhs.errorProgram = "while("++ @cond.errorProgram++"){"++ mark @error 
+                                         ++"\n"++(tab @instrs.errorProgram)++"}"
+                     lhs.output = linkLocal @numVar ((@nLabels!!1)++": "
+                                                     ++ @cond.output ++"brf " ++(@nLabels!!0)++"\n"
+                                                     ++ @instrs.output ++"bra " ++ (@nLabels!!1)++"\n" ++(@nLabels!!0)++":")
+                     instrs.labels = @nLabels
+                     loc.idsLocal = localScope @numVar @lhs.idsLocal
+                     loc.typesLocal = localScope @numVar @lhs.typesLocal
+                     cond.idsLocal = @idsLocal
+                     cond.typesLocal = @typesLocal
+                     instrs.idsLocal = @idsLocal
+                     instrs.typesLocal = @typesLocal
+                     lhs.idsLocal = @lhs.idsLocal
+                     lhs.typesLocal = @lhs.typesLocal
+                     loc.numVar = @instrs.numVar
+                     lhs.algunReturn = False
+                     lhs.faltaReturn = True
+  | Declaration lhs.ast = Declaration @type1.ast @ident
+                loc.error = @errorRet ++ messageDecl @ident  @lhs.idsLocal ++ variableVoid @ident @type1.ast
+                lhs.messages = @error
+                lhs.errorProgram = @type1.errorProgram ++ " "++ @ident ++ ";"
+                                     ++ mark @error
+                lhs.output = ""
+                lhs.idsLocal = insertHeadLast @ident @lhs.idsLocal
+                lhs.typesLocal = insertHeadLast @type1.ast @lhs.typesLocal
+                lhs.numVar = 1
+  | MethodCall lhs.ast = MethodCall @method  @parameters.ast
+            loc.error = existsMethod @method @lhs.tMethods ++ @parameters.messages 
+                        ++ (messageNumParam (length @typeParam) @parameters.numParam)
+            lhs.messages = @error
+            lhs.errorProgram = @method ++"(" ++ @parameters.errorProgram ++");"++ mark @error
+            lhs.output = @parameters.output ++ call @method
+            parameters.typeParam = @typeParam
+            loc.typeParam = findTypeParam @method @lhs.tMethods @lhs.tTypesParam
+  | Return lhs.ast = Return @expr.ast
+            loc.error = @errorRet
+                        ++compTypes ("the method "++ @lhs.method) 
+                                    (findType @lhs.method @lhs.tMethods @lhs.tTypesRet [] []) 
+                                    @expr.type1 
+                        ++ @expr.messages ++ @expr.messagesType
+            lhs.messages = @error
+            lhs.errorProgram = "return "++ @expr.errorProgram ++ ";" 
+                                ++ mark @error
+            lhs.output = @expr.output ++ "str RR\n"
+                         ++ (rep (length @lhs.idsLocal) "unlink\n") ++"ret\n"
+            lhs.algunReturn = True 
+            lhs.faltaReturn = False
+  | * -Asignement-Declaration-MethodCall-Return 
+            loc.error = @errorRet ++ @cond.messages ++ @cond.messagesType 
+                        ++ compTypes ("la condicion "++ @cond.errorProgram) 
+                                     (Just BooleanType) @cond.type1 
+            loc.nLabels = newLabels @lhs.method 2 @lhs.labels
+  | *       loc.errorRet = errorInstruction (@lhs.algunReturn && not @lhs.faltaReturn)
+  | * -Declaration lhs.numVar = 0
+
+attr LocalParams
+  syn ast :: {LocalParams}
+  inh tIdDefs::{[String]}
+  inh typesDefs::{[Type]}
+  inh aIdDefs::{[String]}
+  syn messages :: {[String]}
+  syn errorProgram :: {String}
+  syn output :: {String}
+  inh idsLocal :: {[[String]]}
+  inh typesLocal :: {[[Type]]}
+  inh tMethods::{[String]}
+  inh tTypesParam :: {[[Type]]}
+  inh tTypesRet :: {[Type]}
+  inh typeParam :: {[Type]}
+  syn numParam :: {Int}
+
+sem LocalParams
+  | Cons lhs.ast = @hd.ast : @tl.ast
+         lhs.messages = @hd.messages ++ @tl.messages 
+                        ++ compTypes @hd.errorProgram 
+                                     (primerType @lhs.typeParam) @hd.type1 
+                        ++ @hd.messagesType
+         lhs.errorProgram = @hd.errorProgram ++ commaSeparated @tl.errorProgram
+         lhs.output = @hd.output ++ @tl.output
+         tl.typeParam = drop 1 @lhs.typeParam
+         lhs.numParam = 1+ @tl.numParam 
+  | Nil  lhs.ast = []
+         lhs.messages = []
+         lhs.errorProgram = ""
+         lhs.output = ""
+         lhs.numParam = 0
+
+
+attr Expression
+  syn ast:: {Expression}
+  inh tIdDefs::{[String]}
+  inh typesDefs::{[Type]}
+  inh aIdDefs::{[String]}
+  syn messages::{[String]}
+  syn type1 :: {Maybe Type}
+  syn messagesType ::{[String]} 
+  syn errorProgram :: {String}
+  syn output :: {String}
+  inh idsLocal :: {[[String]]}
+  inh typesLocal :: {[[Type]]}
+  inh tMethods::{[String]}
+  inh tTypesParam :: {[[Type]]}
+  inh tTypesRet :: {[Type]}
+
+sem Expression
+  | LInteger lhs.ast = LInteger @value
+             lhs.messages = []
+             lhs.errorProgram = @value
+             lhs.output = "ldc "++ @value ++"\n"
+  | LBoolean lhs.ast = LBoolean @value
+             lhs.messages = []
+             lhs.errorProgram = @value
+             lhs.output= "ldc "++(if @value=="true" then "-1" else "0")++"\n"
+  | Operation lhs.ast = Operation @op.ast @exprI.ast @exprD.ast  
+              lhs.messages = @exprI.messages ++ @exprD.messages
+              lhs.errorProgram = @exprI.errorProgram ++ @op.errorProgram 
+                                  ++ @exprD.errorProgram
+              lhs.output = @exprI.output++ @exprD.output++ @op.output               
+  | Variable lhs.ast = Variable @ident
+             lhs.messages = messageUse @ident @lhs.tIdDefs @lhs.idsLocal
+             lhs.errorProgram = @ident
+             lhs.output =  useSpaceVar "ld" @ident @lhs.tIdDefs @lhs.idsLocal
+  | ResultCall lhs.ast = ResultCall @method @parameters.ast
+               loc.error = existsMethod @method @lhs.tMethods 
+                           ++ (messageNumParam (length @typeParam) @parameters.numParam)
+               lhs.messages = @error
+               lhs.errorProgram = @method ++"(" ++ @parameters.errorProgram ++")"
+               lhs.output = @parameters.output ++ call @method 
+                            ++ rep @parameters.numParam "str R7\n"  
+                            ++"ldr RR\n"
+               parameters.typeParam = @typeParam
+               loc.typeParam = findTypeParam @method @lhs.tMethods @lhs.tTypesParam
+sem Expression
+  | LInteger   lhs.type1 = Just IntegerType
+  | LBoolean lhs.type1 = Just BooleanType
+  | Variable  lhs.type1 = findType @ident @lhs.tIdDefs @lhs.typesDefs @lhs.idsLocal @lhs.typesLocal
+  | Operation lhs.type1 = @op.type1
+              lhs.messagesType = @op.mType  @exprI.type1 @exprD.type1 
+                                            @exprI.messagesType @exprD.messagesType
+  | ResultCall lhs.type1 = findType @method @lhs.tMethods @lhs.tTypesRet [] []
+                     lhs.messagesType = @parameters.messages 
+  | * -Operation-ResultCall lhs.messagesType = []
+
+attr Op
+  syn ast :: self
+  syn type1 :: {Maybe Type}
+  syn mType :: {Maybe Type->Maybe Type -> [String] -> [String] -> [String]}
+  syn errorProgram:: {String}
+  syn output :: {String}
+
+sem Op
+  | Add          lhs.type1 = Just IntegerType 
+                 lhs.mType = messageType1 "+" IntegerType
+                 lhs.errorProgram = "+"
+                 lhs.output = "add\n"
+  | Sub          lhs.type1 = Just IntegerType
+                 lhs.mType = messageType1 "-" IntegerType
+                 lhs.errorProgram = "-" 
+                 lhs.output = "sub\n"
+  | Product      lhs.type1 = Just IntegerType 
+                 lhs.mType = messageType1 "*" IntegerType
+                 lhs.errorProgram = "*"
+                 lhs.output = "mul\n"
+  | Division     lhs.type1 = Just IntegerType 
+                 lhs.mType = messageType1 "/" IntegerType
+                 lhs.errorProgram = "/"
+                 lhs.output = "div\n"
+  | Module       lhs.type1 = Just IntegerType 
+                 lhs.mType = messageType1 "%" IntegerType
+                 lhs.errorProgram = "%"
+                 lhs.output = "mod\n"
+  | Or           lhs.type1 = Just BooleanType 
+                 lhs.mType = messageType1 "||" BooleanType
+                 lhs.errorProgram = "||"
+                 lhs.output = "or\n"
+  | And          lhs.type1 = Just BooleanType  
+                 lhs.mType = messageType1 "&&" BooleanType
+                 lhs.errorProgram = "&&"
+                 lhs.output = "and\n"
+  | Equal        lhs.type1 = Just BooleanType 
+                 lhs.mType = messageType2 "==" 
+                 lhs.errorProgram = "=="
+                 lhs.output = "eq\n"
+  | NotEqual     lhs.type1 = Just BooleanType
+                 lhs.mType = messageType2 "!="
+                 lhs.errorProgram = "!="
+                 lhs.output = "ne\n"
+  | Less         lhs.type1 = Just BooleanType
+                 lhs.mType = messageType3 "<"
+                 lhs.errorProgram = "<"
+                 lhs.output = "lt\n"
+  | Greater      lhs.type1 = Just BooleanType
+                 lhs.mType = messageType3 ">"
+                 lhs.errorProgram = ">"
+                 lhs.output = "gt\n"
+  | LessEqual    lhs.type1 = Just BooleanType
+                 lhs.mType = messageType3 "<="
+                 lhs.errorProgram = "<="
+                 lhs.output = "le\n"
+  | GreaterEqual lhs.type1 = Just BooleanType 
+                 lhs.mType = messageType3 ">="
+                 lhs.errorProgram = ">="
+                 lhs.output = "ge\n"
+
+{ 
+
+--revision de uso de variables declarateds before o despues
+messageUse :: String -> [String] -> [[String]] -> [String] 
+messageUse id all local = if [] /= (dropWhile (not.(id `elem`)) local) || id `elem` all 
+                             then [] {-["encontado en "++ show (map (id `elem`) local)]-}
+                             else ["'"++id++"' used without declaration"]
+
+messageDecl :: String -> [[String]] -> [String]
+messageDecl id before = if null (dropWhile (not.(id `elem`)) before)
+                             then []
+                             else [id++" twice declarated"]
+
+variableVoid id type1 = if type1 == VoidType 
+                        then ["only methods can be of void type"]
+                        else []
+
+--para mark errores en el codigo
+mark [] = ""
+mark xs = tab (" <-# " ++ foldr (\x a-> x++(if null a then "" else "\n ^^ # "++a)) "" xs)
+
+--funcion para busqueda de type1 en los types declarados
+findType :: String -> [String] -> [Type] -> [[String]] ->[[Type]] -> Maybe Type
+findType v declarateds types locals typesL | isJust i = Just ((typesL!!(fromJust i))!!(fromJust j))
+                                             | isJust index = Just (types!!(fromJust index))
+                                             | otherwise     = Nothing
+    where (i,j) = findLocal v locals
+          index = findIdent v declarateds
+
+findIdent :: String -> [String] -> Maybe Int
+findIdent v declarateds = elemIndex v declarateds 
+
+--funcion para message error de types en asignacion
+compTypes :: String -> Maybe Type -> Maybe Type ->[String]
+compTypes v Nothing _  = ["undefined type  for '"++v++"'"]
+compTypes v t1      t2 = if t1/=t2 then ["It was expected "++(expectedType t1)++" for "++v]
+                                     else []
+expectedType tE = case tE of
+                       Just IntegerType -> "an integer" 
+                       Just BooleanType -> "a boolean"
+                       Just VoidType -> "void"
+                       Nothing -> "nothing"
+
+--funciones para evaluacion de types en expressiones
+
+messageType1 op tE tI tD mI mD = (if tI==(Just tE)&&tD==tI then [] 
+                                   else ["It was expected "++(expectedType (Just tE))
+                                         ++ (lado tI tD tE) ++"'"++op++"'"]
+                                 )++mI++mD
+
+messageType2 op tI tD mI mD = (if tI==tD then [] 
+                                else ["types are not comparables in '"++op++"'"]
+                              )++mI++mD
+
+messageType3 op tI tD mI mD = (if tI==(Just IntegerType)&&tI==tD then [] 
+                                else ["types are not comparables in  '"++op++"'"]
+                              )++mI++mD
+
+lado typeI typeD typeE = let mE = Just typeE
+                         in " a "++ (if typeI/=mE && typeD==mE then  "to the left side" 
+                                      else if typeI==mE && typeD/=mE then "to the rigth side"
+                                            else "both sides"
+                                    ) ++" of "
+
+--funciones para identacion 
+tab :: String -> String
+tab s = foldr (++) ""  ((map ("\t"++) (split (=='\n') s)))
+
+split :: (a -> Bool) -> [a] -> [[a]]
+split p s = case breakI p s of 
+                 (x,[]) -> insNotNull x []
+                 (x,s') -> insNotNull x (w : split p s'')
+                        where (w,s'') = breakI p s'
+    where insNotNull x xs = if null x then xs else x:xs         
+
+breakI :: (a -> Bool) -> [a] -> ([a], [a])
+breakI _ [] = ([],[])
+breakI p (x:xs) | p x = ([x],xs)
+                | otherwise = (x:ys,zs) 
+                      where (ys,zs) = breakI p xs
+
+--funcion para generacion de labels ssm
+newLabels :: String -> Int -> [String] ->[String]
+newLabels method 0 xs = xs
+newLabels method i [] = newLabels method (i-1) ["ET"++method++"0001"]
+newLabels method i (x:xs) = newLabels method (i-1) ((increment method x):x:xs)
+
+increment method etiqueta = etM ++ num 4 (show ((read n ::Int)+1))
+    where etM = "ET"++method
+          n = etiqueta \\ etM
+num n xs = (replicate (n-(length xs)) '0') ++ xs
+
+--acceso al espacio reservado de una variable
+useSpaceVar :: String -> String -> [String] -> [[String]] -> String
+useSpaceVar ac v all local | isJust i = "ldr MP\n" ++ (rep (fromJust i) "lda 0\n") 
+                                             ++ ac ++"a "++ (show (fromJust j +1)) ++"\n"
+                                | isJust k = "ldr R4\n"++ac++"a "++(show (fromJust k + 1))++"\n"
+                                | otherwise = "nop nop nop" 
+    where (i,j) = findLocal v local
+          k     = findIdent v all 
+
+rep i s =  foldl (++) "" (replicate i s)
+
+--funcion para busqueda de variable local
+findLocal :: String -> [[String]] -> (Maybe Int,Maybe Int)
+findLocal v locals = case (foldl f (0,Nothing) locals) of
+                             (i,Nothing) -> (Nothing,Nothing)
+                             (i,Just j)  -> (Just (i-1),Just j)
+    where f a ls = case a of
+                       (i,Nothing) -> (i+1,findIdent v ls)
+                       (i,Just j)  -> (i,Just j)
+
+--funcion para insertar variable al ultimo ambito
+insertHeadLast :: a -> [[a]] ->[[a]]
+insertHeadLast x1 (xs:xss) = (xs++[x1]):xss 
+insertHeadLast x1 [] = [[x1]]
+
+--funcion para call a method
+call method  = "bsr ET"++method++"0000\n"
+
+--funcion para comprobacion de name de method
+existsMethod method tMethods = if method `elem` tMethods then []
+                             else ["Don't exists a method named "++method]
+
+--revision de parameters
+primerType :: [Type] -> Maybe Type
+primerType [] = Nothing
+primerType (x:xs) = Just x
+
+findTypeParam :: String -> [String] -> [[Type]] -> [Type]
+findTypeParam method all typesParam |isJust t   = typesParam!!(fromJust t)
+                                        |otherwise = []
+    where t = findIdent method all
+
+messageNumParam form loc | form > loc = ["faltan "++ show (form - loc) ++" parameters"] 
+                         | form < loc = ["sobran "++ show (loc - form) ++" parameters"]
+                         | otherwise  = []
+
+loadParams numParam = if numParam==0 then ""
+                       else "ldml -" ++show (numParam+1)++" "++(show numParam)++"\n"
+                            ++"stml 1 "++(show numParam)++"\n"
+
+--funciones para errores en return
+errorReturn method VoidType False = []
+errorReturn method VoidType True  = ["the method "++method++" doesn't expect any return"]
+errorReturn method type1      False = ["the method "++method++" must have a return in each option"]
+errorReturn method type1      True  = []
+
+
+errorInstruction return = if return then ["instruction unreachable"] else []
+
+--funciones para reducir ambitos sin variables declarateds
+linkLocal :: Int -> String -> String 
+linkLocal num ins = if num>0 then "link "++(show num)++"\n"++ins++"unlink\n"
+                             else ins++" nop\n"
+
+localScope :: Int -> [[a]] -> [[a]]
+localScope num locals = if num>0 then []:locals
+                                   else locals
+commaSeparated :: String -> String
+commaSeparated xs = if null xs then xs else ", "++xs
+
+}

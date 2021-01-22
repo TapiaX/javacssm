@@ -1,0 +1,67 @@
+{-
+Gramatica:
+
+programa -> "class"     identificador cuerpoClase
+         |  "interface" identificador
+
+cuerpoClase -> "{" miembros "}"
+
+miembros -> miembro miembros
+         | epsilon
+
+miembro -> tipo identificador ";"
+        |  tipo identificador "(" parametros ")" bloque
+
+parametros = [parametro]
+
+parametro = tipo nombre
+
+bloque -> "{" instrucciones "}"
+
+instrucciones -> asignacion ";" instrucciones
+               |  condicional instrucciones
+               |  cicloCond instrucciones
+               |  epsilon
+
+asignacion -> identificador "=" expresion
+condicional -> "if" "(" expresion ")" bloque bloque
+cicloCond -> "while" "(" expresion ")" bloque bloque
+
+expresion = literalEntero
+          | literalCadena 
+
+-}
+
+
+ Programa -> Clase id "{" ListaMiembros "}"
+              | Interfaz id             
+ ListaMiembros -> Miembro*
+                  
+Miembro -> Tipo idAtributo ";"
+        | Tipo idMetodo "(" ")" CuerpoMetodo
+          
+Tipo -> TipoEntero
+     | TipoBooleano
+     | TipoString
+     | TipoVacio
+
+CuerpoMetodo -> "{" Instrucciones "}"
+              | ";"
+ 
+Instrucciones -> Instruccion ";" Instrucciones
+             | Condicional Instrucciones
+             | CicloCond Instrucciones
+             | VacioInstrucciones
+
+Instruccion ->Variable "=" Expresion
+
+     
+Variable -> idVariable
+
+Expresion -> ValorEntero 
+           | ValorBooleano 
+           | ValorString 
+           | ValorVariable 
+     
+
+     

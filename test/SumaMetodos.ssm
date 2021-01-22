@@ -1,0 +1,31 @@
+link 2
+ldrr R4 MP
+bsr ETmain0000
+bra FIN
+ETmain0000: link 0
+ldc 4
+bsr ETf0000
+str R7
+ldr RR
+ldc 3
+bsr ETf0000
+str R7
+ldr RR
+add
+ldr R4
+sta 1
+unlink
+ret
+ETf0000: link 1
+ldml -2 1
+stml 1 1
+ldr MP
+lda 1
+ldc 1
+sub
+str RR
+unlink
+ret
+unlink
+ret
+FIN: halt

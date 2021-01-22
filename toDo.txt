@@ -1,0 +1,66 @@
+Luis Tapia
+2020/8/15
+
+Goals of this compiler (+reached, *recent, -remaining, #consequence)
+	+type analisis (attributes, variables, methods, conditions)
+	+instructions, conditional and condicional loop
+	+expressions with operators precedence 
+	+reference to atributes (global variables)
+	+local scope for each instructions block (includes conditions)
+	    #shadowing global variables
+	    *only if contains declared variables 
+	+reference to local variables 
+	+declaration of local variable (instruction)
+	+asignement of atributes and variables (instruccion)
+	+main method (non-static) 
+	+call to a method in instruction 
+		# supports recursive methods
+	+parameters (passing parameters)
+		+number and type of local parameters (expressions) must match with formals parameters 
+	+return instruction (method result)
+	    + call to a method in expression
+	   		# result can be used in asignement, condition or in local parameter  
+	   	*returning from any block of instructions within a method (includes nested blocks)
+	*restriction of void type for atributes and variables 
+		#restriction of void type method in asignement
+	*restriction of void type in parameters (formals)
+		#too for actual parameteters
+	*restriction method with void type must have no return
+	*restriction methodo with type different from void must have a return
+		*for each execution path
+		*return must be the last instruction of a block
+			#instruction after return is unreacheable (it never executes)
+
+
+Detected Errors of language detected by this compiler 
+ Sintax errors
+ 	from Scanner  
+	+Invalid character 
+ 	from Parser   
+ 	+invalid program sintax
+ Semantic errors
+    from AnalisisContexto 
+    +variable not declarated (in either local or global scope)
+	+variable declared twice (in same or previous local scope) 
+	+incompatible type for variable (in same or previous local scope) 
+	+incorrect type of expression (in asignement, parameter, condition)
+	*only methods can be of void type
+	+method is not found
+	+number of parameters doesn't match (too much or too few)
+	+type of parameter doesn't match
+	+type of return is different than the expected one for method
+	+method doesn't expect any return
+	*missing return for method
+	*instruction unreachable 
+ Logical errors 
+        out of scope
+
+Asserts about the return instruction
+some return = exist a return
+missing return = there is one or more missing returns in an execution path (more instruccions are admited)
+unreachable = some return and no missing return
+void method = method have void type
+invalid return = void method and some return
+
+always missing return in conditional loop(while)
+mising return in conditional (if) if missing return in any of its blocks 

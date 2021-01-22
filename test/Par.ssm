@@ -1,0 +1,41 @@
+link 1
+ldrr R4 MP
+bsr ETmain0000
+bra FIN
+ETesPar0000: link 1
+ldml -2 1
+stml 1 1
+link 0
+ldr MP
+lda 0
+lda 1
+ldc 2
+mod
+ldc 0
+eq
+brf ETesPar0001
+ldc -1
+str RR
+unlink
+unlink
+ret
+bra ETesPar0002
+ETesPar0001: ldc 0
+str RR
+unlink
+unlink
+ret
+nop
+ETesPar0002: unlink
+unlink
+ret
+ETmain0000: link 0
+ldc 4
+bsr ETesPar0000
+str R7
+ldr RR
+ldr R4
+sta 1
+unlink
+ret
+FIN: halt

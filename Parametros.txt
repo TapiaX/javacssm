@@ -1,0 +1,27 @@
+A -> aA
+   | Epsilon
+
+parserA = parse "a" <*> parseA
+       <|> succeed 
+
+A -> a,A
+   | a
+
+parserA = parse "a" <* parse "," <*> parserA
+       <|> parse "a"
+
+A -> aB		A1
+   | Epsilon	A2
+B -> ,aB        B1  ebnf = (,a)*
+   | Epsilon	B2
+
+parserA = list <$> parse "a" <*> parserB
+       <|> succeed []
+parserB = pMany (parse "," <*> parse "a")
+
+ "a,a"->(A1B1,"") 
+ "a"->(A1B2,"") 
+ ""->(A2,"") 
+ "aa"->(A1B2,"a") Nunca se reconoce sin separador
+
+

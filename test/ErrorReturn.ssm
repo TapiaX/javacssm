@@ -1,0 +1,119 @@
+link 1
+ldrr R4 MP
+bsr ETmain0000
+bra FIN
+ETmain0000: link 0
+unlink
+ret
+ETxor0000: link 2
+ldml -3 2
+stml 1 2
+link 0
+ldr MP
+lda 0
+lda 1
+brf ETxor0001
+link 0
+ldr MP
+lda 0
+lda 0
+lda 2
+brf ETxor0003
+ldc 0
+str RR
+unlink
+unlink
+unlink
+ret
+bra ETxor0004
+ETxor0003: ldc -1
+str RR
+unlink
+unlink
+unlink
+ret
+nop
+ETxor0004: unlink
+bra ETxor0002
+ETxor0001: link 0
+ldr MP
+lda 0
+lda 0
+lda 2
+brf ETxor0005
+ldc -1
+str RR
+unlink
+unlink
+unlink
+ret
+bra ETxor0006
+ETxor0005: ldc 0
+str RR
+unlink
+unlink
+unlink
+ret
+nop
+ETxor0006: unlink
+nop
+ETxor0002: unlink
+unlink
+ret
+ETg0000: link 3
+ldml -3 2
+stml 1 2
+ldc 0
+ldr MP
+sta 3
+link 3
+ETg0001: ldr MP
+lda 0
+lda 1
+ldc 0
+gt
+brf ETg0002
+ldr MP
+lda 3
+ldc 1
+add
+ldr MP
+sta 3
+ldr MP
+lda 1
+ldc 10
+div
+ldr MP
+sta 1
+link 0
+ldr MP
+lda 0
+lda 2
+brf ETg0003
+ldr MP
+lda 0
+lda 3
+str RR
+unlink
+unlink
+ret
+bra ETg0004
+ETg0003: nop
+ETg0004: unlink
+ldc 1
+str RR
+unlink
+ret
+bra ETg0001
+ETg0002: unlink
+ldc 3
+ldr MP
+sta 3
+ldr MP
+lda 3
+str RR
+unlink
+ret
+unlink
+ret
+FIN: halt
